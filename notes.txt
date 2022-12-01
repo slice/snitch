@@ -1,0 +1,21 @@
+scrape some kind of "base" to determine if we need the details
+evaluates to a minimal set of information that we can compare to know if we need the details
+
+- for frontend: get the landing page, use `x-build-id` header
+  https://<branch>.discord.com/app
+- for hosts:
+  - for windows: use courgette
+  https://updates.discord.com/distributions/app/manifests/latest?channel=<branch>&platform=win&arch=x86
+  - for mac, linux: use host endpoints
+  https://discordapp.com/api/updates/<branch>?platform={osx,linux}
+
+don't bother fetching the build number if the build id is the same
+
+if the "base" has changed from the previous, then scrape the details
+
+- for frontend:
+  download entrypoint script and find the build information
+  should have regexes for both swc and pre-swc
+- for hosts: parse the json appropriately
+
+store the details, and post to a webhook/notify api consumers/websocket
