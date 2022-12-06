@@ -9,9 +9,10 @@ evaluates to a minimal set of information that we can compare to know if we need
   - for mac, linux: use host endpoints
   https://discordapp.com/api/updates/<branch>?platform={osx,linux}
 
-don't bother fetching the build number if the build id is the same
+don't bother fetching the build number if the build id is the same, because it's kinda expensive
 
-if the "base" has changed from the previous, then scrape the details
+if the "base" has changed from the previous, then scrape the details and diff
+from the previous
 
 - for frontend:
   download entrypoint script and find the build information

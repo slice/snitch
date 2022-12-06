@@ -16,6 +16,8 @@ module Snitch.Discord (
   -- * Assets
   AppAssetType (..),
   AppAsset (..),
+  assetTypeExtension,
+  assetUrl,
 ) where
 
 import Data.Hashable (Hashable (hashWithSalt))
@@ -106,3 +108,13 @@ branchBaseUrl = \case
 -- | The URL to access the web application for a certain branch. The 'Development' branch does not have one.
 branchAppUrl :: Branch -> Maybe (Url 'Https)
 branchAppUrl = ((/: "app") <$>) . branchBaseUrl
+
+-- | Returns the file extension used for a type of app asset.
+assetTypeExtension :: AppAssetType -> Text
+assetTypeExtension Stylesheet = "css"
+assetTypeExtension Script = "js"
+
+-- | Returns a URL that points to an 'AppAsset'.
+assetUrl :: AppAsset -> Url 'Https
+assetUrl (AppAsset{appAssetHash, appAssetType}) =
+  https "discord.com" /: "assets" /: (appAssetHash <> "." <> assetTypeExtension appAssetType)

@@ -2,6 +2,7 @@ module Snitch.Scrape (
   -- * Types
   Html (..),
   Js (..),
+  FrontalAppBuildInfo,
 
   -- * Errors
   ScrapeError (..),
@@ -14,7 +15,6 @@ module Snitch.Scrape (
   siftBuildNumber,
 ) where
 
-import Control.Arrow (left)
 import Control.Effect.Throw
 import Control.Exception (Exception)
 import Control.Monad (unless, (<=<))
@@ -56,7 +56,7 @@ extractHash text = do
   pure $ T.intercalate "." $ take (length components - 1) components
 
 tryDecode :: (Has (Throw ScrapeError) sig m) => ByteString -> m Text
-tryDecode bs = liftEither $ left (const DecodingFailed) (decodeUtf8' bs)
+tryDecode = decodeUtf8Throwing DecodingFailed
 
 -- | Tries to look up a 'BuildId' returned from a 'Response'.
 lookupBuildId :: Response -> Maybe BuildId
@@ -64,13 +64,18 @@ lookupBuildId r = do
   headerBs <- responseLookupHeader r (encodeUtf8 "x-build-id")
   (BuildId <$>) . rightToMaybe . decodeUtf8' $ headerBs
 
+{- | The identifying information of an app build that can be scraped with only
+ a single request.
+-}
+type FrontalAppBuildInfo = (BuildId, [AppAsset])
+
 {- | Requests a branch's app page, extracting the 'BuildId' from the response
  headers and list of 'AppAsset's from the page HTML.
 
  'MissingInformation' is thrown if there is a missing or malformed @x-build-id@
  header, or if there aren't any scripts or stylesheets in the HTML.
 -}
-hitAppPage :: (Has Http sig m, Has (Throw ScrapeError) sig m) => Branch -> m (BuildId, [AppAsset])
+hitAppPage :: (Has Http sig m, Has (Throw ScrapeError) sig m) => Branch -> m FrontalAppBuildInfo
 hitAppPage branch = do
   appUrl <- liftEither $ maybe (Left BranchHasNoApp) Right $ branchAppUrl branch
   response <- get appUrl

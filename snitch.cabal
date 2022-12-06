@@ -86,15 +86,13 @@ library
         Snitch.Scrape
         Snitch.Parser
         Snitch.Effects
+        Snitch.Internal.Util
 
     build-depends:
         , req ^>= 3.13
         , hashable ^>= 1.4
         , tagsoup ^>= 0.14
         , megaparsec ^>= 9.3
-
-    other-modules:
-        Snitch.Internal.Util
 
     hs-source-dirs:   src
 

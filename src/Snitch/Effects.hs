@@ -1,11 +1,15 @@
 -- | Algebraic effects.
-module Snitch.Effects (Http (..), get, Response (..), HttpReqC (..)) where
+module Snitch.Effects (Http (..), get, getDecoding, Response (..), HttpReqC (..)) where
 
 import Control.Algebra
+import Control.Effect.Throw (Throw)
+import Control.Monad ((<=<))
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.ByteString (ByteString)
 import Data.Kind (Type)
+import Data.Text
 import Network.HTTP.Req qualified as Req
+import Snitch.Internal.Util (decodeUtf8Throwing)
 
 {- | An effect for making HTTP requests.
 
@@ -19,6 +23,12 @@ data Http (m :: Type -> Type) k where
 
 get :: Has Http sig m => Req.Url 'Req.Https -> m Response
 get = send . Get
+
+{- | A helper function to 'get' a URL, then decode its body as UTF-8 text,
+ throwing an error if the response was malformed.
+-}
+getDecoding :: (Has Http sig m, Has (Throw e) sig m) => e -> Req.Url 'Req.Https -> m Text
+getDecoding e = (decodeUtf8Throwing e . responseBody) <=< get
 
 newtype HttpReqC m a = HttpReqC {runHttpReq :: m a}
   deriving newtype (Functor, Applicative, Monad, MonadIO)
