@@ -16,11 +16,15 @@ module Snitch.Discord (
   -- * Assets
   AppAssetType (..),
   AppAsset (..),
+  appAssetType,
+  AppAssets (..),
   assetTypeExtension,
   assetUrl,
+  assetUrl',
 ) where
 
 import Data.Hashable (Hashable (hashWithSalt))
+import Data.List.NonEmpty (NonEmpty)
 import Data.Text (Text)
 import GHC.Generics (Generic)
 import Network.HTTP.Req (Scheme (..), Url, https, (/:))
@@ -49,7 +53,7 @@ data AppVersion = AppVersion
 data AppBuild = AppBuild
   { buildVersion :: AppVersion
   -- ^ The version of the build.
-  , buildAssets :: [AppAsset]
+  , buildAssets :: AppAssets
   -- ^ The assets present in the build.
   }
   deriving stock (Show, Generic)
@@ -69,15 +73,34 @@ data AppAssetType
   deriving stock (Eq, Show, Generic)
   deriving anyclass (Hashable)
 
+type ScriptAsset = AppAsset 'Script
+type StylesheetAsset = AppAsset 'Stylesheet
+
 -- | An asset loaded by the web application.
-data AppAsset = AppAsset
-  { appAssetHash :: Text
-  -- ^ The hash of the asset, identifying it on the CDN.
-  , appAssetType :: AppAssetType
-  -- ^ The type of the asset.
+data AppAsset (t :: AppAssetType) where
+  MkScript :: Text -> ScriptAsset
+  MkStylesheet :: Text -> StylesheetAsset
+
+deriving instance Eq (AppAsset t)
+deriving instance Show (AppAsset t)
+
+instance Hashable (AppAsset t) where
+  hashWithSalt s (MkScript hash) = s `hashWithSalt` hash
+  hashWithSalt s (MkStylesheet hash) = s `hashWithSalt` hash
+
+-- | Returns an asset's type.
+appAssetType :: AppAsset t -> AppAssetType
+appAssetType (MkScript _) = Script
+appAssetType (MkStylesheet _) = Stylesheet
+
+-- | A set of assets associated with a build of the web application.
+data AppAssets = AppAssets
+  { scripts :: NonEmpty (AppAsset 'Script)
+  -- ^ The scripts present in the build.
+  , stylesheets :: NonEmpty (AppAsset 'Stylesheet)
+  -- ^ The stylesheets present in the build.
   }
-  deriving stock (Eq, Show, Generic)
-  deriving anyclass (Hashable)
+  deriving stock (Show, Eq, Generic)
 
 -- | A build channel.
 data Branch
@@ -114,7 +137,20 @@ assetTypeExtension :: AppAssetType -> Text
 assetTypeExtension Stylesheet = "css"
 assetTypeExtension Script = "js"
 
+-- | A helper function to return the file extension for an asset.
+extension :: AppAsset t -> Text
+extension = assetTypeExtension . appAssetType
+
 -- | Returns a URL that points to an 'AppAsset'.
-assetUrl :: AppAsset -> Url 'Https
-assetUrl (AppAsset{appAssetHash, appAssetType}) =
-  https "discord.com" /: "assets" /: (appAssetHash <> "." <> assetTypeExtension appAssetType)
+assetUrl :: AppAsset t -> Url 'Https
+assetUrl asset@(MkScript hash) = assetUrl' hash (extension asset)
+assetUrl asset@(MkStylesheet hash) = assetUrl' hash (extension asset)
+
+-- | Constructs a URL that points to an asset on Discord's CDN.
+assetUrl' ::
+  -- | The hash of the asset.
+  Text ->
+  -- | The file extension of the asset.
+  Text ->
+  Url 'Https
+assetUrl' hash ext = https "discord.com" /: "assets" /: (hash <> "." <> ext)

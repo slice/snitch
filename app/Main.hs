@@ -26,28 +26,30 @@ type Snitch sig m =
   , MonadIO m
   )
 
-data SnitchError = MissingEntrypointScript | MissingBuildNumber
+data SnitchError = MissingBuildNumber
   deriving stock (Show, Eq)
 
 instance Exception SnitchError
 
-scrapeApp :: Snitch sig m => Branch -> m (BuildId, [AppAsset])
+scrapeApp :: Snitch sig m => Branch -> m FrontalAppBuildInfo
 scrapeApp branch = do
   trace $ "hitting app page for frontend " <> show branch
   bundle@(_, assets) <- hitAppPage branch
   trace $ "assets: " <> show assets
   pure bundle
 
-newBuildIdDetected :: Snitch sig m => FrontalAppBuildInfo -> m ()
-newBuildIdDetected (_, assets) = do
+newBuildIdDetected :: Snitch sig m => Poll -> m ()
+newBuildIdDetected Starting = pure ()
+newBuildIdDetected (Ok (_, assets)) = do
   trace "new build id detected!"
-  -- TODO: This error should technically be impossible. Make this
-  -- unrepresentable in the future with non-empty lists.
-  entrypoint <- liftMaybe MissingEntrypointScript $ entrypointScript assets
+  let entrypoint = entrypointScript . scripts $ assets
   trace $ "entrypoint script: " <> show entrypoint
   entrypointText <- getDecoding DecodingFailed $ assetUrl entrypoint
   buildNumber <- liftMaybe MissingBuildNumber $ siftBuildNumber (Js entrypointText)
   trace $ "build number: " <> show buildNumber
+
+data Poll = Ok FrontalAppBuildInfo | Starting
+  deriving stock (Show, Eq)
 
 main :: IO ()
 main =
@@ -61,20 +63,20 @@ main =
  where
   delaySeconds = threadDelay . (1000000 *)
 
-  step :: Snitch sig m => m FrontalAppBuildInfo
-  step = liftIO (delaySeconds 5) *> scrapeApp Canary
+  step :: Snitch sig m => m Poll
+  step = liftIO (delaySeconds 5) *> (Ok <$> scrapeApp Canary)
+
+  tryPoll :: Snitch sig m => m a -> m (Maybe a)
+  tryPoll f = Exc.catch (Just <$> f) ((Nothing <$) . handleHttpException)
 
   handleHttpException :: Snitch sig m => HttpException -> m ()
   handleHttpException exc = trace $ "Poll failed with HTTP exception: " ++ show exc
-
-  safeStep :: Snitch sig m => m (Maybe FrontalAppBuildInfo)
-  safeStep = Exc.catch (Just <$> step) ((Nothing <$) . handleHttpException)
 
   safeCmp (Just a) (Just b) = a /= b
   safeCmp _ _ = False
 
   app :: Snitch sig m => m ()
-  app = pollBy (Just (BuildId "", [])) safeStep (maybe (pure ()) newBuildIdDetected) safeCmp
+  app = pollBy @_ @(Maybe Poll) (Just Starting) (tryPoll step) (maybe (pure ()) newBuildIdDetected) safeCmp
 
   throwLeft :: (MonadIO m, Exception l) => m (Either l ()) -> m ()
   throwLeft = (>>= either (void . liftIO . throwIO) (const $ pure ()))

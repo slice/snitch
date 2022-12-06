@@ -17,9 +17,10 @@ module Snitch.Scrape (
 
 import Control.Effect.Throw
 import Control.Exception (Exception)
-import Control.Monad (unless, (<=<))
+import Control.Monad ((<=<))
 import Data.ByteString (ByteString)
 import Data.List (tails)
+import Data.List.NonEmpty qualified as NE
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding (decodeUtf8', encodeUtf8)
@@ -67,7 +68,7 @@ lookupBuildId r = do
 {- | The identifying information of an app build that can be scraped with only
  a single request.
 -}
-type FrontalAppBuildInfo = (BuildId, [AppAsset])
+type FrontalAppBuildInfo = (BuildId, AppAssets)
 
 {- | Requests a branch's app page, extracting the 'BuildId' from the response
  headers and list of 'AppAsset's from the page HTML.
@@ -81,9 +82,7 @@ hitAppPage branch = do
   response <- get appUrl
   html <- (Html <$>) . tryDecode . responseBody $ response
   buildId <- liftMaybe (MissingInformation "Missing or malformed x-build-id header") $ lookupBuildId response
-  let assets = parseAssets html
-  unless (any ((Script ==) . appAssetType) assets) $ throwError $ MissingInformation "No scripts found"
-  unless (any ((Stylesheet ==) . appAssetType) assets) $ throwError $ MissingInformation "No stylesheets found"
+  assets <- liftEither $ parseAssets html
   pure (buildId, assets)
 
 -- | Sifts a build number from the content of the entire entrypoint script.
@@ -103,21 +102,24 @@ siftBuildNumber (Js text) = do
  this may change in the future, and we should not rely on this being the case.
  However, it is much cheaper to assume that the last script is the entrypoint.
 -}
-entrypointScript :: [AppAsset] -> Maybe AppAsset
-entrypointScript = lastMaybe . filter ((Script ==) . appAssetType)
+entrypointScript :: NE.NonEmpty (AppAsset 'Script) -> AppAsset 'Script
+entrypointScript = NE.last
 
 -- | Parses the appropriate 'HTML' tags into 'AppAsset's.
-parseAssets :: Html -> [AppAsset]
+parseAssets :: Html -> Either ScrapeError AppAssets
 parseAssets (Html html) =
-  scripts ++ stylesheets
+  do
+    scriptsNE <- maybeToRight (MissingInformation "No scripts found") $ NE.nonEmpty scripts
+    stylesheetsNE <- maybeToRight (MissingInformation "No stylesheets found") $ NE.nonEmpty stylesheets
+    pure $ AppAssets scriptsNE stylesheetsNE
  where
   tags = parseTags html
   stylesheets =
-    [ AppAsset href Stylesheet
-    | TagOpen "link" attrs@(extractHash <=< lookup "href" -> Just href) : _ <- tails tags
+    [ MkStylesheet hash
+    | TagOpen "link" attrs@(extractHash <=< lookup "href" -> Just hash) : _ <- tails tags
     , lookup "rel" attrs == Just "stylesheet"
     ]
   scripts =
-    [ AppAsset src Script
-    | TagOpen "script" (extractHash <=< lookup "src" -> Just src) : _ <- tails tags
+    [ MkScript hash
+    | TagOpen "script" (extractHash <=< lookup "src" -> Just hash) : _ <- tails tags
     ]
