@@ -20,3 +20,240 @@ from the previous
 - for hosts: parse the json appropriately
 
 store the details, and post to a webhook/notify api consumers/websocket
+
+- Builds
+  2016-2018
+  ```
+  webpackJsonp(
+    [...] // unknown, assumption pre-required chunk ids
+    [...] // array of modules as functions, module IDs are the same as the module's index in the array
+    [...] // unknown, optional
+  )
+  ```
+
+  2019-2021
+  ```
+  (window.webpackJsonp = window.webpackJsonp || []).push([
+    [...] // unknown, assumption pre-required chunk ids
+    [...] // array of modules as functions, module IDs are the same as the module's index in the array
+    [...] // unknown, assumption pre-required chunk ids
+  ])
+  ```
+  
+  2022 (pre swc/post swc) - Current
+  ```
+  (this.webpackChunkdiscord_app = this.webpackChunkdiscord_app || []).push([
+    [...] // unknown, assumption pre-required chunk ids
+    { number: ArrowFunctionExpression } // Module ID to module function mappings
+    (require) => {...} // unknown, the "require" function is being passed to this function
+  ])
+  ```
+
+- Modules
+  Modules can be either arrow functions for normal fnctions depending on the
+  year the chunk is from, generally arraw func modules are found from 2022 onwards
+  These functions can have up-to 3 arguments, which map to the following:
+    1. `module` Object
+    2. `exports` Object
+    3. `require` function
+  Implementation of these can seen in the respective chunk loader for that build
+
+  Parsing these depends on the build type, pseudo AST given below
+
+  2016 - 2018 builds
+  ```
+  body: ExpressionStatement
+    expr: CallExpression
+      callee: Identifier
+        name: webpackJsonp
+      arguments: // MUST fullfil the following condition `3 >= aruments.length >= 2`
+        [1]: ArrayExpression
+          [elements] // These can be null, DO NOT filter them, non-null values are functions explained above
+  ```
+  In short, modules are under `expr.arguments[1].elements`
+
+  2019 - 2021 & 2022 - current builds
+  ```
+  body: ExpressionStatement
+    expr: CallExpression
+      callee: MemberExpression
+        object: AssignmentExpression
+          left: MemberExpression
+            // 2019 - 2021
+            object: Identifier
+              name: "window"
+            // 2022 - current
+            object: ThisExpression
+
+            property: Identifier // MUST be the same as `right.left.property`
+              // 2019 - 2021
+              name: "webpackJsonp"
+              // 2022 - current
+              name: "webpackChunkdiscord_app"
+          right: LogicalExpression
+            left: MemberExpression
+              // 2019 - 2021
+              object: Identifier
+                name: "window"
+              // 2022 - current
+              object: ThisExpression
+
+              property: Identifier // MUST be the same as `left.property`
+                // 2019 - 2021
+                name: "webpackJsonp"
+                // 2022 - current
+                name: "webpackChunkdiscord_app"
+        property: Identifier
+          name: "push"
+      arguments: // MUST have a length of 1
+        [0]: ArrayExpression // MUST fullfil the following condition `3 >= aruments.length >= 2`
+          // 2019 - 2021
+          [1]: ArrayExpression
+            [elements]: FunctionExpression // These can be null, DO NOT filter them, non-null values are functions explained above
+          // 2022 - current
+          [1]: ObjectExpression
+            properties:
+              [elements]: Property
+                key: Literal
+                  value // Module ID
+                value: ArrowFunctionExpression // Function explained above
+  ```
+  In short, modules are under `expr.arguments[0].elements[1].elements` or `expr.arguments[0].elements[1].properties`
+
+- Assets
+  these modules have a simple body, pseudo AST below
+  ```
+  params: // MUST have a lenght of 3
+    [elements]: Identifier
+  body: BlockStatement
+    body: // MUST have a lenght of 1
+      [0]: ExpressionStatement
+        expression: AssignmentExpression
+          left: MemberExpression
+            object: Identifier
+              name // MUST be the same as `module.params[0].name`
+            property: Identifier
+              name: "exports"
+          right: BinaryExpression
+            left: MemberExpression
+              object: Identifier
+                name // MUST be the same as `module.params[2].name`
+              property: Identifier
+                name // Can be dynamic, depends on the chunk loader
+            right: Literal
+              raw // MUST start with ", just an insurance check
+              value // The 32 len asset hash + "." + extension
+  ```
+  In short, `module.body.body[0].expression.right.right.value`
+
+- Strings
+  Strings are automatically tracked by https://github.com/Discord-Datamining/Discord-Datamining
+  via https://github.com/Discord-Datamining/comments-action which uses https://github.com/adryd325/discord-datamining-lang-differ
+  Based on the various builds compared from 2016 to current,
+  string modules can be represented with the following pseudo AST
+
+  2016 - 2018
+  ```
+  params: // MUST have a length more than or equal to 2
+    [elements]: Identifier
+  body: BlockStatement
+    body: // MUST have a length more than or equal to 2
+      [1]: ExpressionStatement
+        expression: SequenceExpression
+          expressions: // MUST have a length more than or equal to 2
+            [1]: AssignmentExpression
+              left: MemberExpression
+                object: Identifier
+                  name // MUST be the same as module.params[1].name
+                // 2016
+                property: Literal
+                  value: "default"
+                // 2017 - 2018
+                property: Identifier
+                  name: "default"
+              right: ObjectExpression
+                properties:
+                  [elements]: Property
+                    key: Identifier
+                      name // Must have one key from ["DISCORD_DESC_SHORT", "DISCORD_NAME", "NOTIFICATION_BODY_ATTACHMENT"]
+                    value:
+                      value // String
+  ```
+
+  2019 - 2022 (pre swc & post swc)
+  2022 (post swc) buolds have multiple modules for strings with different AST structures
+  ```
+  params: // MUST have a length more than or equal to 1
+    [elements]: Identifier
+  body: BlockStatement
+    body: // MUST have a length more than or equal to 1
+      // If the below is true for the first element
+      [0]: ExpressionStatement
+        expression: Literal
+          value: "use strict"
+      // Then `module.body.body` must have a length of more than 1
+      // and the following index is determined by that condition
+      [0|1]: ExpressionStatement
+        expression: AssignmentExpression
+          left: MemberExpression
+            object: Identifier
+              name // MUST be the same as `module.params[0].name`
+            property: Identifier
+              name: "exports"
+          right: CallExpression
+            callee: MemberExpression
+              object: Identifier
+                name: "Object"
+              property: Identifier
+                name: "freeze"
+            arguments: // MUST have a length of 1
+              [0]: ObjectExpression
+                properties:
+                  [elements]: Property
+                    key: Identifier
+                      name // Must have one key from ["DISCORD_DESC_SHORT", "DISCORD_NAME", "NOTIFICATION_BODY_ATTACHMENT"]
+                    value:
+                      value // String
+  ```
+
+  2022 (post swc)
+  ```
+  body: BlockStatement
+    body: // MUST have a length more than or equal to 3
+      [2]: ExpressionStatement
+        expression: AssignmentExpression
+          left: MemberExpression
+            object: Identifier
+              name // MUST be the same as `module.params[0].name`
+            property: Identifier
+              name: "exports"
+          right: CallExpression
+            callee: MemberExpression
+              object: Identifier
+                name: "Object"
+              property: Identifier
+                name: "freeze"
+            arguments: // MUST have a length of 1
+              [0]: SequenceExpression
+                expressions: // MUST have a lenght more than 1
+                  [0]: CallExpression
+                    arguments: // MUST have a lenght of 3
+                      [0]: AssignmentExpression
+                        right: ObjectExpression
+                          properties:
+                            [elements]: Property
+                              key: Identifier
+                                name // Must have one key from ["DISCORD_DESC_SHORT", "DISCORD_NAME", "NOTIFICATION_BODY_ATTACHMENT"]
+                              value:
+                                value // String
+                      [1]: Literal
+                        value // Name of the string
+                      [2]: Literal
+                        value // String
+                  [elements]: CallExpression // MUST filter out aything other than `CallExpression`
+                    arguments:
+                      [1]: Literal
+                        value: // Name of the string
+                      [2]:
+                        value: // String
+  ```
