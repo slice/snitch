@@ -21,6 +21,38 @@ from the previous
 
 store the details, and post to a webhook/notify api consumers/websocket
 
+- `/app`
+  `X-Build-Id` header exposes build hash
+
+  Global Environment Variables: `window\.GLOBAL_ENV ?= ?(\{.+?\});`
+
+  Surface level chunks:
+    JS: `src="/assets/([0-9a-fA-f]{20}).js"`
+    CSS: `href="/assets/(\d+?\.?[0-9a-fA-f]{20}).css"`
+
+  There are upto 4 surface level js chunks:
+    1. Chunk Loader
+    2. Main Chunk
+
+    1. Chunk Loader
+    2. Class Mappings
+    3. Main Chunk
+
+    1. Chunk Loader
+    2. Class Mappings
+    3. Vendor Chunk
+    4. Main Chunk
+
+- Chunk Loader
+
+  To find all chunks:
+    JS: `(\{(?:[\de]+?:"[0-9a-fA-F]{20}",?)+\})\[\w+?\]\+".js"`
+    CSS: `(\{(?:[\de]+?:"[0-9a-fA-F]{20}",?)+\})\[\w+?\]\+".css"`
+
+  Builds which reqire to prefix chunks with their id:
+    JS: `\+\w+?\+"\."\+(\{(?:[\de]+?:"[0-9a-fA-F]{20}",?)+\})\[\w+?\]\+".js"`
+    CSS: `\+\w+?\+"\."\+(\{(?:[\de]+?:"[0-9a-fA-F]{20}",?)+\})\[\w+?\]\+".css"` (? unverified)
+
 - Builds
   2016-2018
   ```
