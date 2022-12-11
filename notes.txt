@@ -57,25 +57,25 @@ store the details, and post to a webhook/notify api consumers/websocket
   2016-2018
   ```
   webpackJsonp(
-    [ number,+ ] // Chunks (ID) to preload
+    [ number,+ ] // chunks (ID) to preload
     [...] // array of modules as functions, module IDs are the same as the module's index in the array
-    [ number,+ ] // Modules (ID) to execute immediately
+    [ number,+ ] // modules (ID) to execute immediately
   )
   ```
 
   2019-2021
   ```
   (window.webpackJsonp = window.webpackJsonp || []).push([
-    [...] // unknown, assumption pre-required chunk ids
+    [...] // chunks (ID) to preload
     [...] // array of modules as functions, module IDs are the same as the module's index in the array
-    [ [ number,+ ],+ ] // Modules (ID) to execute immediately
+    [ [ number,+ ],+ ] // modules (ID) to execute immediately
   ])
   ```
   
   2022 (pre swc/post swc) - Current
   ```
   (this.webpackChunkdiscord_app = this.webpackChunkdiscord_app || []).push([
-    [...] // unknown, assumption pre-required chunk ids
+    [...] // chunks (ID) to preload
     { number: ArrowFunctionExpression } // Module ID to module function mappings
     (require) => {...} // executed immediately upon `.push` call
   ])
