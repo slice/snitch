@@ -57,9 +57,9 @@ store the details, and post to a webhook/notify api consumers/websocket
   2016-2018
   ```
   webpackJsonp(
-    [...] // unknown, assumption pre-required chunk ids
+    [ number,+ ] // Chunks (ID) to preload
     [...] // array of modules as functions, module IDs are the same as the module's index in the array
-    [...] // unknown, optional
+    [ number,+ ] // Modules (ID) to execute immediately
   )
   ```
 
@@ -68,7 +68,7 @@ store the details, and post to a webhook/notify api consumers/websocket
   (window.webpackJsonp = window.webpackJsonp || []).push([
     [...] // unknown, assumption pre-required chunk ids
     [...] // array of modules as functions, module IDs are the same as the module's index in the array
-    [...] // unknown, assumption pre-required chunk ids
+    [ [ number,+ ],+ ] // Modules (ID) to execute immediately
   ])
   ```
   
@@ -77,7 +77,7 @@ store the details, and post to a webhook/notify api consumers/websocket
   (this.webpackChunkdiscord_app = this.webpackChunkdiscord_app || []).push([
     [...] // unknown, assumption pre-required chunk ids
     { number: ArrowFunctionExpression } // Module ID to module function mappings
-    (require) => {...} // unknown, the "require" function is being passed to this function
+    (require) => {...} // executed immediately upon `.push` call
   ])
   ```
 
